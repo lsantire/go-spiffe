@@ -7,7 +7,9 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/spiffe/go-spiffe/v2/spiffeid"
 	"github.com/spiffe/go-spiffe/v2/spiffetls/tlsconfig"
+	"github.com/spiffe/go-spiffe/v2/svid/x509svid"
 	"github.com/spiffe/go-spiffe/v2/workloadapi"
 )
 
@@ -19,15 +21,22 @@ const (
 	writeTimeout   = 3 * time.Second
 )
 
+var expectedClientID spiffeid.ID
+var matcher spiffeid.Matcher
+
+// Global variables initialization
+func init() {
+	// Allowed SPIFFE ID and it's matcher
+	expectedClientID = spiffeid.Must("example.org", "client")
+	matcher = spiffeid.MatchID(expectedClientID)
+}
+
 func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), contextTimeout)
 	defer cancel()
 
 	// Set up a `/` resource handler
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		log.Println("Request received")
-		_, _ = io.WriteString(w, "Success!!!")
-	})
+	http.HandleFunc("/", handler)
 
 	// Create a `workloadapi.X509Source`, it will connect to Workload API using provided socket.
 	// If socket path is not defined using `workloadapi.SourceOption`, value from environment variable `SPIFFE_ENDPOINT_SOCKET` is used.
@@ -49,4 +58,28 @@ func main() {
 	if err := server.ListenAndServeTLS("", ""); err != nil {
 		log.Fatalf("Error on serve: %v", err)
 	}
+}
+
+func handler(w http.ResponseWriter, r *http.Request) {
+	log.Println("Request received")
+
+	// Get client's SPIFFE ID from certificate
+	clientID, err := x509svid.IDFromCert(r.TLS.PeerCertificates[0])
+
+	// This should never happen, because the TLS config accepts only valid SVIDs as client certificate
+	if err != nil {
+		log.Printf("An error ocurred while getting the SPIFFE ID from client certificate: %v", err)
+		http.Error(w, "Unexpected error", http.StatusInternalServerError)
+		return
+	}
+
+	// Check whether the clientID matches the expected SPIFFE ID or not
+	if err := matcher(clientID); err != nil {
+		log.Printf("Unauthorized: %v", err)
+		http.Error(w, "Unexpected SPIFFE ID", http.StatusUnauthorized)
+		return
+	}
+
+	log.Printf("OK, expected SPIFFE ID found: %v\n", clientID)
+	_, _ = io.WriteString(w, "Success!!!")
 }
