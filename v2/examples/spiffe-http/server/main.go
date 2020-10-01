@@ -5,17 +5,21 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/spiffe/go-spiffe/v2/spiffeid"
 	"github.com/spiffe/go-spiffe/v2/spiffetls/tlsconfig"
 	"github.com/spiffe/go-spiffe/v2/workloadapi"
 )
 
-// Worload API socket path
-const socketPath = "unix:///tmp/agent.sock"
+const (
+	// Worload API socket path
+	socketPath     = "unix:///tmp/agent.sock"
+	contextTimeout = 3 * time.Second
+)
 
 func main() {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithTimeout(context.Background(), contextTimeout)
 	defer cancel()
 
 	// Set up a `/` resource handler
