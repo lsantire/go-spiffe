@@ -74,7 +74,8 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Check whether the clientID matches the expected SPIFFE ID or not
-	if err := matcher(clientID); err != nil {
+	err = matcher(clientID)
+	if err != nil {
 		log.Printf("Unauthorized: %v", err)
 		http.Error(w, "Unexpected SPIFFE ID", http.StatusUnauthorized)
 		return
