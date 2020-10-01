@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/spiffe/go-spiffe/v2/spiffeid"
 	"github.com/spiffe/go-spiffe/v2/spiffetls/tlsconfig"
 	"github.com/spiffe/go-spiffe/v2/workloadapi"
 )
@@ -16,6 +15,8 @@ const (
 	// Worload API socket path
 	socketPath     = "unix:///tmp/agent.sock"
 	contextTimeout = 3 * time.Second
+	readTimeout    = 3 * time.Second
+	writeTimeout   = 3 * time.Second
 )
 
 func main() {
@@ -36,14 +37,13 @@ func main() {
 	}
 	defer source.Close()
 
-	// Allowed SPIFFE ID
-	clientID := spiffeid.Must("example.org", "client")
-
-	// Create a `tls.Config` to allow mTLS connections, and verify that presented certificate has SPIFFE ID `spiffe://example.org/client`
-	tlsConfig := tlsconfig.MTLSServerConfig(source, source, tlsconfig.AuthorizeID(clientID))
+	// Create a `tls.Config` to allow mTLS connections, and verify that the presented certificate has any SPIFFE ID
+	tlsConfig := tlsconfig.MTLSServerConfig(source, source, tlsconfig.AuthorizeAny())
 	server := &http.Server{
-		Addr:      ":8443",
-		TLSConfig: tlsConfig,
+		Addr:         ":8443",
+		TLSConfig:    tlsConfig,
+		ReadTimeout:  readTimeout,
+		WriteTimeout: writeTimeout,
 	}
 
 	if err := server.ListenAndServeTLS("", ""); err != nil {
