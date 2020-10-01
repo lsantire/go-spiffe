@@ -5,6 +5,7 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/spiffe/go-spiffe/v2/spiffeid"
 	"github.com/spiffe/go-spiffe/v2/spiffetls/tlsconfig"
@@ -13,12 +14,21 @@ import (
 
 const (
 	// Workload API socket path
-	socketPath = "unix:///tmp/agent.sock"
-	serverURL  = "https://localhost:8443/"
+	socketPath     = "unix:///tmp/agent.sock"
+	serverURL      = "https://localhost:8443/"
+	contextTimeout = 3 * time.Second
 )
 
+var serverID spiffeid.ID
+
+// Global variables initialization
+func init() {
+	// Allowed SPIFFE ID
+	serverID = spiffeid.Must("example.org", "server")
+}
+
 func main() {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithTimeout(context.Background(), contextTimeout)
 	defer cancel()
 
 	// Create a `workloadapi.X509Source`, it will connect to Workload API using provided socket path
@@ -28,9 +38,6 @@ func main() {
 		log.Fatalf("Unable to create X509Source %v", err)
 	}
 	defer source.Close()
-
-	// Allowed SPIFFE ID
-	serverID := spiffeid.Must("example.org", "server")
 
 	// Create a `tls.Config` to allow mTLS connections, and verify that presented certificate has SPIFFE ID `spiffe://example.org/server`
 	tlsConfig := tlsconfig.MTLSClientConfig(source, source, tlsconfig.AuthorizeID(serverID))
@@ -51,5 +58,5 @@ func main() {
 		log.Fatalf("Unable to read body: %v", err)
 	}
 
-	log.Printf("%s", body)
+	log.Printf("Response: status=%v, body=%s", r.Status, body)
 }
